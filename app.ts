@@ -48,6 +48,43 @@ setupSwagger(app, BASE_URL);
  *         id: 1
  *         name: John Doe
  *         email: john@example.com
+ *     Post:
+ *       type: object
+ *       required:
+ *         - title
+ *         - authorId
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: The auto-generated ID of the post
+ *         title:
+ *           type: string
+ *           description: The title of the post
+ *         content:
+ *           type: string
+ *           description: The content of the post
+ *         authorId:
+ *           type: integer
+ *           description: The ID of the author
+ *       example:
+ *         id: 1
+ *         title: My First Post
+ *         content: Hello World
+ *         authorId: 1
+ *     Tag:
+ *       type: object
+ *       required:
+ *         - name
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: The auto-generated ID of the tag
+ *         name:
+ *           type: string
+ *           description: The name of the tag
+ *       example:
+ *         id: 1
+ *         name: Tech
  */
 
 /**
@@ -70,30 +107,120 @@ setupSwagger(app, BASE_URL);
  *             schema:
  *               $ref: '#/components/schemas/User'
  *       400:
- *         description: User already exists
+ *         description: Bad request
  */
 app.post('/users', async (req: Request, res: Response) => {
   const { name, email } = req.body;
+  const user = await prisma.user.create({
+    data: { name, email },
+  });
+  res.json(user);
+});
 
-  try {
-    const user = await prisma.user.create({
-      data: { name, email },
-    });
-    res.json(user);
-  } catch (error) {
-    res.status(400).json({ error: 'User already exists' });
-  }
+/**
+ * @swagger
+ * /posts:
+ *   post:
+ *     summary: Create a new post
+ *     tags: [Posts]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Post'
+ *     responses:
+ *       200:
+ *         description: The post was successfully created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Post'
+ *       400:
+ *         description: Bad request
+ */
+app.post('/posts', async (req: Request, res: Response) => {
+  const { title, content, authorId, tagIds } = req.body;
+
+  const post = await prisma.post.create({
+    data: {
+      title,
+      content,
+      author: { connect: { id: authorId } }, // Connect to the existing author
+      tags: {
+        connect: tagIds.map((id: number) => ({ id })), // Connect existing tags
+      },
+    },
+  });
+
+  res.json(post);
+});
+
+/**
+ * @swagger
+ * /tags:
+ *   post:
+ *     summary: Create a new tag
+ *     tags: [Tags]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Tag'
+ *     responses:
+ *       200:
+ *         description: The tag was successfully created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Tag'
+ *       400:
+ *         description: Bad request
+ */
+app.post('/tags', async (req: Request, res: Response) => {
+  const { name } = req.body;
+  const tag = await prisma.tag.create({
+    data: { name },
+  });
+  res.json(tag);
+});
+
+/**
+ * @swagger
+ * /posts:
+ *   get:
+ *     summary: Get all posts with their authors and tags
+ *     tags: [Posts]
+ *     responses:
+ *       200:
+ *         description: List of posts with authors and tags
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Post'
+ */
+app.get('/posts', async (req: Request, res: Response) => {
+  const posts = await prisma.post.findMany({
+    include: {
+      author: true, // Include author data
+      tags: true, // Include associated tags
+    },
+  });
+  res.json(posts);
 });
 
 /**
  * @swagger
  * /users:
  *   get:
- *     summary: Get all users
+ *     summary: Get all users with their posts
  *     tags: [Users]
  *     responses:
  *       200:
- *         description: List of users
+ *         description: List of users with their posts
  *         content:
  *           application/json:
  *             schema:
@@ -102,7 +229,9 @@ app.post('/users', async (req: Request, res: Response) => {
  *                 $ref: '#/components/schemas/User'
  */
 app.get('/users', async (req: Request, res: Response) => {
-  const users = await prisma.user.findMany();
+  const users = await prisma.user.findMany({
+    include: { posts: true }, // Include associated posts
+  });
   res.json(users);
 });
 
